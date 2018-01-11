@@ -102,6 +102,8 @@ void closeLogFile();
 BOOL initializeLogging(const char *lpCmdLine, const char* exePath, const int pathLen);
 void msgBox(const char* text);
 void signalError();
+char *getStringNativeChars(JNIEnv *env, jstring jstr);
+void printException(JNIEnv* psJNIEnv, jthrowable jtExcptn);
 BOOL loadString(const int resID, char* buffer);
 BOOL loadBool(const int resID);
 int loadInt(const int resID);

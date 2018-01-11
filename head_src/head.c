@@ -232,6 +232,81 @@ void signalError()
 	closeLogFile();
 }
 
+
+char *getStringNativeChars(JNIEnv *env, jstring jstr)
+{
+	jbyteArray bytes = 0;
+	jthrowable exc;
+	char *result = 0;
+	if ((*env)->EnsureLocalCapacity(env, 2) < 0) {
+		char *errorMessage = "EnsureLocalCapacity failed.";
+		debug(errorMessage);
+		msgBox(errorMessage);
+		return 0;
+	}
+    jclass stringClass = (*env)->GetObjectClass(env, jstr);
+    jmethodID MID_String_getBytes = (*env)->GetMethodID(env, stringClass, "getBytes", "()[B");
+	bytes = (*env)->CallObjectMethod(env, jstr, MID_String_getBytes);
+	exc = (*env)->ExceptionOccurred(env);
+	if (!exc) {
+		jint len = (*env)->GetArrayLength(env, bytes);
+		result = (char *) malloc(len + 1);
+		if (result == 0) {
+			(*env)->DeleteLocalRef(env, bytes);
+			char *errorMessage = "Failed to allocate memory.";
+			debug(errorMessage);
+			msgBox(errorMessage);
+			return 0;
+		}
+		(*env)->GetByteArrayRegion(env, bytes, 0, len, (jbyte *) result);
+		result[len] = 0;
+	} else {
+		(*env)->DeleteLocalRef(env, exc);
+	}
+	(*env)->DeleteLocalRef(env, bytes);
+	return result;
+}
+
+void printException(JNIEnv* psJNIEnv, jthrowable jtExcptn)
+{
+	(*psJNIEnv)->ExceptionClear(psJNIEnv);
+	jclass clsStringWriter = (*psJNIEnv)->FindClass(psJNIEnv, "java/io/StringWriter");
+	jmethodID midStringWriterInit = (*psJNIEnv)->GetMethodID(psJNIEnv, clsStringWriter, "<init>", "()V");
+	jobject objStringWriter = (*psJNIEnv)->NewObject(psJNIEnv, clsStringWriter, midStringWriterInit);
+
+	jclass clsPrintWriter = (*psJNIEnv)->FindClass(psJNIEnv, "java/io/PrintWriter");
+	jmethodID midPrintWriterInit = (*psJNIEnv)->GetMethodID(psJNIEnv, clsPrintWriter, "<init>", "(Ljava/io/Writer;)V");
+	jobject objPrintWriter = (*psJNIEnv)->NewObject(psJNIEnv, clsPrintWriter, midPrintWriterInit, objStringWriter);
+
+	jclass clsThrowable = (*psJNIEnv)->FindClass(psJNIEnv, "java/lang/Throwable");
+	jmethodID midPrintStackTrace = (*psJNIEnv)->GetMethodID(psJNIEnv, clsThrowable, "printStackTrace", "(Ljava/io/PrintWriter;)V");
+	(*psJNIEnv)->CallVoidMethod(psJNIEnv, jtExcptn, midPrintStackTrace, objPrintWriter);
+
+	jmethodID midToString = (*psJNIEnv)->GetMethodID(psJNIEnv, clsStringWriter, "toString", "()Ljava/lang/String;");
+	jstring objStackTrace = (jstring) (*psJNIEnv)->CallObjectMethod(psJNIEnv, objStringWriter, midToString);
+	char* message = getStringNativeChars(psJNIEnv, objStackTrace);
+	if(message) {
+		// remove \r from input, because printf automatically replaces \n with \r\n
+		char temp[strlen(message)];
+		int j = 0;
+		for(int i = 0; i < strlen(message); i++) {
+			if(message[i] != '\r') temp[j++] = message[i];
+		}
+		temp[j] = '\0';
+		free(message);
+		message = temp;
+		debug("Exception: %s", message);
+	}
+
+	jmethodID midGetMessage = (*psJNIEnv)->GetMethodID(psJNIEnv, clsThrowable, "getMessage", "()Ljava/lang/String;");
+	jstring objMessage = (jstring) (*psJNIEnv)->CallObjectMethod(psJNIEnv, jtExcptn, midGetMessage);
+	message = getStringNativeChars(psJNIEnv, objMessage);
+	if(message) {
+		msgBox(message);
+		free(message);
+	}
+}
+
 BOOL loadString(const int resID, char* buffer)
 {
 	HRSRC hResource;
@@ -1444,7 +1519,7 @@ int invokeMainClass(JNIEnv* psJNIEnv)
 	jtExcptn = (*psJNIEnv)->ExceptionOccurred(psJNIEnv);
 	if (jtExcptn != NULL)
 	{
-		(*psJNIEnv)->ExceptionDescribe(psJNIEnv);
+		printException(psJNIEnv, jtExcptn);
 		return -1;
 	}
 	if (jcMnCls == NULL)
@@ -1456,7 +1531,7 @@ int invokeMainClass(JNIEnv* psJNIEnv)
 	jtExcptn = (*psJNIEnv)->ExceptionOccurred(psJNIEnv);
 	if (jtExcptn != NULL)
 	{
-		(*psJNIEnv)->ExceptionDescribe(psJNIEnv);
+		printException(psJNIEnv, jtExcptn);
 	}
 	if (jmMnMthd == NULL)
 	{
@@ -1470,7 +1545,7 @@ int invokeMainClass(JNIEnv* psJNIEnv)
 	jtExcptn = (*psJNIEnv)->ExceptionOccurred(psJNIEnv);
 	if (jtExcptn != NULL)
 	{
-		(*psJNIEnv)->ExceptionDescribe(psJNIEnv);
+		printException(psJNIEnv, jtExcptn);
 		return -1;
 	}
 	for (pcCurrArg = strtok(rgcMnClsCpy, g_pcSep); pcCurrArg; pcCurrArg = strtok(NULL, g_pcSep))
@@ -1481,12 +1556,18 @@ int invokeMainClass(JNIEnv* psJNIEnv)
 		jtExcptn = (*psJNIEnv)->ExceptionOccurred(psJNIEnv);
 		if(jtExcptn != NULL)
 		{
-			(*psJNIEnv)->ExceptionDescribe(psJNIEnv);
+			printException(psJNIEnv, jtExcptn);
 			return -1;
 		}
 	}
 	/* Execute the class */
 	(*psJNIEnv)->CallStaticVoidMethod(psJNIEnv, jcMnCls, jmMnMthd, joAppArgs);
+	jtExcptn = (*psJNIEnv)->ExceptionOccurred(psJNIEnv);
+	if (jtExcptn != NULL)
+	{
+		printException(psJNIEnv, jtExcptn);
+		return -1;
+	}
 	return 0;
 }
 
