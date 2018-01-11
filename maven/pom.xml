@@ -165,7 +165,7 @@
                 <version>1.0-alpha-8</version>
                 <extensions>true</extensions>
                 <configuration>
-					<compilerExecutable>${env.MINGW_HOME}\bin\gcc.exe</compilerExecutable>
+					<compilerExecutable>x86_64-w64-mingw32-gcc</compilerExecutable>
 					<objectFileExtension>o</objectFileExtension>
                     <sources>
                         <source>
@@ -181,8 +181,8 @@
                         <compilerStartOption>-O3</compilerStartOption>
                     </compilerStartOptions>
 					<compilerMiddleOptions>
-						<compilerMiddleOption>-I ${env.JAVA_HOME}\include</compilerMiddleOption>
-						<compilerMiddleOption>-I ${env.JAVA_HOME}\include\win32</compilerMiddleOption>
+						<compilerMiddleOption>-I "${env.JAVA_HOME}/include"</compilerMiddleOption>
+						<compilerMiddleOption>-I "${env.JAVA_HOME}/include/win32"</compilerMiddleOption>
 					</compilerMiddleOptions>
                 </configuration>
                 <executions>
