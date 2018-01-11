@@ -570,7 +570,14 @@ BOOL isLauncherPathValid(const char* path)
 
 void regSearchWow(const char* keyName, const int searchType)
 {
-	if (search.runtimeBits == INIT_RUNTIME_BITS)
+	if (loadBool(JNI)) {
+		#if defined(_WIN64)
+			search.runtimeBits = USE_64_BIT_RUNTIME;
+		#elif defined(_WIN32)
+			search.runtimeBits = USE_32_BIT_RUNTIME;
+		#endif
+	}
+	else if (search.runtimeBits == INIT_RUNTIME_BITS)
 	{
 		search.runtimeBits = loadInt(RUNTIME_BITS);
 	}
