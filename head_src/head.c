@@ -417,27 +417,118 @@ BOOL regQueryValue(const char* regPath, unsigned char* buffer,
 	return result;
 }
 
+int findNextVersionPart(const char* startAt)
+{
+	if (startAt == NULL || strlen(startAt) == 0)
+    {
+		return 0;
+	}
+
+	char* firstSeparatorA = strchr(startAt, '.');
+	char* firstSeparatorB = strchr(startAt, '_');
+	char* firstSeparator;
+	if (firstSeparatorA == NULL)
+    {
+		firstSeparator = firstSeparatorB;
+	}
+    else if (firstSeparatorB == NULL)
+    {
+		firstSeparator = firstSeparatorA;
+	}
+    else
+    {
+		firstSeparator = min(firstSeparatorA, firstSeparatorB);
+	}
+
+	if (firstSeparator == NULL)
+    {
+		return strlen(startAt);
+	}
+
+	return firstSeparator - startAt;
+}
+
+/**
+ * This method will take java version from `originalVersion` string and convert/format it
+ * into `version` string that can be used for string comparison with other versions.
+ *
+ * Due to different version schemas <=8 vs. >=9 it will "normalize" versions to 1 format
+ * so we can directly compare old and new versions.
+ */
 void formatJavaVersion(char* version, const char* originalVersion)
 {
-    char* updatePart = strchr(originalVersion, '_');
-
-    if (updatePart != NULL)
+	strcpy(version, "");
+	if (originalVersion == NULL || strlen(originalVersion) == 0)
     {
-        // skip underscore
-        updatePart++;
+		return;
+	}
 
-        if (strlen(updatePart) < 3)
+	int partsAdded = 0;
+	int i;
+	char* pos = (char*) originalVersion;
+	int curPartLen;
+
+	while ((curPartLen = findNextVersionPart(pos)) > 0)
+    {
+		char number[curPartLen + 1];
+		memset(number, 0, curPartLen + 1);
+		strncpy(number, pos, curPartLen);
+
+		if (partsAdded == 0 && (curPartLen != 1 || number[0] != '1'))
         {
-            const int majorVersionLength = updatePart - originalVersion;
-            strncpy(version, originalVersion, majorVersionLength);
-            *(version + majorVersionLength) = 0;
-            strcat(version, "0");
-            strcat(version, updatePart);
-            return;
-        }
-    }
-    
-    strcpy(version, originalVersion);
+			// NOTE: When it's java 9+ we'll add "1" as the first part of the version
+			strcpy(version, "1");
+			partsAdded++;
+		}
+
+		if (partsAdded < 3)
+        {
+			if (partsAdded > 0)
+            {
+				strcat(version, ".");
+			}
+			for (i = 0;
+					(partsAdded > 0)
+							&& (i < JRE_VER_MAX_DIGITS_PER_PART - strlen(number));
+					i++)
+            {
+				strcat(version, "0");
+			}
+			strcat(version, number);
+		}
+        else if (partsAdded == 3)
+        {
+			// add as an update
+			strcat(version, "_");
+			for (i = 0; i < JRE_VER_MAX_DIGITS_PER_PART - strlen(number); i++)
+            {
+				strcat(version, "0");
+			}
+			strcat(version, number);
+		}
+        else if (partsAdded >= 4)
+        {
+			debug("Warning:\tformatJavaVersion() too many parts added.\n");
+			break;
+		}
+		partsAdded++;
+
+		pos += curPartLen + 1;
+		if (pos >= originalVersion + strlen(originalVersion))
+        {
+			break;
+		}
+	}
+
+	for (i = partsAdded; i < 3; i++)
+    {
+		strcat(version, ".");
+		int j;
+		for (j = 0; j < JRE_VER_MAX_DIGITS_PER_PART; j++)
+        {
+			strcat(version, "0");
+		}
+	}
 }
 
 void regSearch(const char* keyName, const int searchType)
@@ -524,10 +615,6 @@ BOOL isJavaHomeValid(const char* keyName, const int searchType)
 				path[i] = buffer[i];
 			} while (path[i++] != 0);
 			
-			if (searchType & FOUND_SDK)
-			{
-				appendPath(path, "jre");
-			}
 			valid = isLauncherPathValid(path);
 		}
 		RegCloseKey(hKey);
