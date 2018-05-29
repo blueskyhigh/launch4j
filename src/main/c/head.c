@@ -1423,7 +1423,10 @@ int prepare(const char *lpCmdLine)
 	g_sJavaVMInitArgs.options = malloc(iArgCnt * sizeof(JavaVMOption));
 	memset(g_sJavaVMInitArgs.options, 0, iArgCnt * sizeof(JavaVMOption));
 	for (pcCurrOpt = strtok(rgcOptCpy, g_pcSep); pcCurrOpt; pcCurrOpt = strtok(NULL, g_pcSep), iCurrArg++)
-		g_sJavaVMInitArgs.options[iCurrArg].optionString = pcCurrOpt;
+	{
+		g_sJavaVMInitArgs.options[iCurrArg].optionString = malloc(strlen(pcCurrOpt) + 1);
+		strcpy(g_sJavaVMInitArgs.options[iCurrArg].optionString, pcCurrOpt);
+	}
 	g_sJavaVMInitArgs.nOptions = iArgCnt;
 	setMainClassAndClassPath(exePath, pathLen);
 	setCommandLineArgs(lpCmdLine);
