@@ -871,6 +871,17 @@ BOOL expandVars(char *dst, const char *src, const char *exePath, const int pathL
 			{
                 strcat(dst, getenv ("CLIENTNAME") != NULL ? getenv ("CLIENTNAME") : getenv ("COMPUTERNAME"));
 			}
+            else if (strcmp(varName, "USER.HOME") == 0)
+			{
+				char* userHome = getenv ("USERPROFILE");
+				char* userHomeTemp = userHome;
+				while(*userHomeTemp != '\0') {
+					if(*userHomeTemp == '\\')
+						*userHomeTemp = '/';
+					userHomeTemp++;
+				}
+                strcat(dst, userHome);
+			}
             else if (strcmp(varName, "TIMESTAMP") == 0)
 			{
             	strftime(dst + strlen(dst), 16, "%Y%m%d_%H%M%S", timeinfo);
