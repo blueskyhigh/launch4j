@@ -31,6 +31,7 @@
 
 #include "resource.h"
 #include "head.h"
+#include "uthash.h"
 
 HMODULE hModule;
 FILE* hLog;
@@ -74,6 +75,12 @@ struct
 	char args[MAX_ARGS];
 	char cmdline[MAX_ARGS];
 } launcher;
+
+struct elem_struct {
+	char *key;
+	char *value;
+	UT_hash_handle hh;
+};
 
 /* Java Invocation API stuff */
 typedef jint (JNICALL CreateJavaVM_t)(JavaVM **pvm, void **env, void *args);
@@ -951,37 +958,9 @@ void appendHeapSize(char *dst, const int megabytesID, const int percentID,
 	}
 }
 
-void setJvmOptions(char *jvmOptions, const char *exePath)
+void loadIniFile(char *jvmOptions, const char *iniFilePath)
 {
-	if (loadString(JVM_OPTIONS, jvmOptions))
-	{
-		strcat(jvmOptions, " ");
-	}
-
-	/*
-	 * Load additional JVM options from .l4j.ini file
-	 * Options are separated by spaces or CRLF
-	 * # starts an inline comment
-	 */
-	char tmpPath[_MAX_PATH] = {0};
-	char iniFilePath[_MAX_PATH] = {0};
 	long hFile;
-
-	if (loadString(INI_PATH, tmpPath)) {
-		expandVars(iniFilePath, tmpPath, exePath, strlen(exePath));
-		struct _stat statBuf;
-		if (_stat(iniFilePath, &statBuf) == 0 && statBuf.st_mode & S_IFDIR) {
-			char *exePathTmp = strrchr(exePath, '\\');
-			strncat(iniFilePath, exePathTmp, strlen(exePathTmp) - 3);
-			strcat(iniFilePath, "l4j.ini");
-		}
-	}
-	else
-	{
-		strncpy(iniFilePath, exePath, strlen(exePath) - 3);
-		strcat(iniFilePath, "l4j.ini");
-	}
-
 	if ((hFile = _open(iniFilePath, _O_RDONLY)) != -1)
 	{
 		debug("Loading:\t%s\n", iniFilePath);
@@ -1016,7 +995,83 @@ void setJvmOptions(char *jvmOptions, const char *exePath)
 			strcat(jvmOptions, " ");
 		}
 		_close(hFile);
-	}	
+	}
+}
+
+void setJvmOptions(char *jvmOptions, const char *exePath)
+{
+	if (loadString(JVM_OPTIONS, jvmOptions))
+	{
+		strcat(jvmOptions, " ");
+	}
+
+	/*
+	 * Load additional JVM options from .l4j.ini file
+	 * Options are separated by spaces or CRLF
+	 * # starts an inline comment
+	 */
+	char tmpPath[_MAX_PATH] = {0};
+	char iniFilePath[_MAX_PATH] = {0};
+	char *exeName = strrchr(exePath, '\\');
+
+	strncpy(iniFilePath, exePath, strlen(exePath) - 3);
+	strcat(iniFilePath, "l4j.ini");
+	loadIniFile(jvmOptions, iniFilePath);
+	
+	*iniFilePath = '\0';
+	char* userHome = getenv ("USERPROFILE");
+	strcat(iniFilePath, userHome);
+	strncat(iniFilePath, exeName, strlen(exeName) - 3);
+	strcat(iniFilePath, "l4j.ini");
+	loadIniFile(jvmOptions, iniFilePath);
+
+	if (loadString(INI_PATH, tmpPath)) {
+		*iniFilePath = '\0';
+		expandVars(iniFilePath, tmpPath, exePath, strlen(exePath));
+		struct _stat statBuf;
+		if (_stat(iniFilePath, &statBuf) == 0 && statBuf.st_mode & S_IFDIR) {
+			strncat(iniFilePath, exeName, strlen(exeName) - 3);
+			strcat(iniFilePath, "l4j.ini");
+		}
+		loadIniFile(jvmOptions, iniFilePath);
+	}
+
+	char *jvmOptionsTemp = malloc(strlen(jvmOptions) + 1);
+	*jvmOptionsTemp = 0;
+	char *key = strtok(jvmOptions, g_pcSep);
+	struct elem_struct *elem, *tmp, *vmArgs = NULL;
+	while (key != NULL) {
+		char *value = strchr(key, '=');
+		if (value != NULL)
+			*value++ = 0;
+
+		HASH_FIND_STR(vmArgs, key, elem);
+		if (elem == NULL) {
+			elem = (struct elem_struct *) malloc(sizeof *elem);
+			elem->key = key;
+			elem->value = value;
+			HASH_ADD_KEYPTR(hh, vmArgs, elem->key, strlen(elem->key), elem);
+		} else {
+			elem->value = value;
+		}
+		key = strtok(NULL, g_pcSep);
+	}
+
+	HASH_ITER(hh, vmArgs, elem, tmp)
+	{
+		strcat(jvmOptionsTemp, elem->key);
+		if(elem->value != NULL) {
+			strcat(jvmOptionsTemp, "=");
+			strcat(jvmOptionsTemp, elem->value);
+		}
+		strcat(jvmOptionsTemp, " ");
+		HASH_DEL(vmArgs, elem);
+		free(elem);
+	}
+	if(strlen(jvmOptionsTemp))
+		*(jvmOptionsTemp + strlen(jvmOptionsTemp) - 1) = 0;
+	strcpy(jvmOptions, jvmOptionsTemp);
+	free(jvmOptionsTemp);
 }
 
 BOOL createMutex()

@@ -127,6 +127,7 @@ BOOL expandVars(char *dst, const char *src, const char *exePath, const int pathL
 void appendHeapSizes(char *dst);
 void appendHeapSize(char *dst, const int megabytesID, const int percentID,
 		const DWORDLONG availableMemory, const char *option);
+void loadIniFile(char *jvmOptions, const char *iniFilePath);
 void setJvmOptions(char *jvmOptions, const char *exePath);
 BOOL createMutex();
 void setWorkingDirectory(const char *exePath, const int pathLen);
