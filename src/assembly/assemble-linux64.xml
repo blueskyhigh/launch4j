@@ -38,6 +38,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	<fileSets>
 		<fileSet>
 			<directory>bin/bin-linux64</directory>
+			<directoryMode>0755</directoryMode>
+			<fileMode>0755</fileMode>
 			<outputDirectory>${finalName}-workdir-linux64/bin</outputDirectory>
 		</fileSet>
 		<fileSet>			
