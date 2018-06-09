@@ -82,10 +82,6 @@ public class Builder {
 		FileOutputStream os = null;
 		final RcBuilder rcb = new RcBuilder();
 		try {
-			if (c.isJni()) {
-				_log.append("WARNING: Some features are not implemented in JNI headers, see documentation.");
-			}
-
 			rc = rcb.build(c);
 			ro = Util.createTempFile("o");
 			outfile = ConfigPersister.getInstance().getOutputFile();
