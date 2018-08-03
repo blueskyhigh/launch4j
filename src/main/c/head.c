@@ -39,6 +39,7 @@ BOOL debugAll = FALSE;
 BOOL console = FALSE;
 BOOL wow64 = FALSE;
 char oldPwd[_MAX_PATH];
+jint exitCode = 0;
 
 PROCESS_INFORMATION processInformation;
 DWORD processPriority;
@@ -1422,6 +1423,10 @@ void setCommandLineArgs(const char *lpCmdLine)
 	}
 }
 
+void (JNICALL jvmExit_hook)(jint code) {
+	exitCode = code;
+}
+
 int prepare(const char *lpCmdLine)
 {
 	if (!initGlobals())
@@ -1484,10 +1489,18 @@ int prepare(const char *lpCmdLine)
 	char rgcOptCpy[MAX_ARGS] = {0};
 	strncpy(rgcOptCpy, launcher.args, MAX_ARGS - 1);
 	char *pcCurrOpt;
-	int iArgCnt = getArgCount(rgcOptCpy) + 1;
+	int iArgCnt = getArgCount(rgcOptCpy) + 3;
 	char iCurrArg = 1;
 	g_sJavaVMInitArgs.options = malloc(iArgCnt * sizeof(JavaVMOption));
 	memset(g_sJavaVMInitArgs.options, 0, iArgCnt * sizeof(JavaVMOption));
+	g_sJavaVMInitArgs.options[iCurrArg].optionString = malloc(5);
+	strcpy(g_sJavaVMInitArgs.options[iCurrArg].optionString, "exit");
+	g_sJavaVMInitArgs.options[iCurrArg].extraInfo = jvmExit_hook;
+	iCurrArg++;
+	g_sJavaVMInitArgs.options[iCurrArg].optionString = malloc(6);
+	strcpy(g_sJavaVMInitArgs.options[iCurrArg].optionString, "abort");
+	g_sJavaVMInitArgs.options[iCurrArg].extraInfo = jvmExit_hook;
+	iCurrArg++;
 	for (pcCurrOpt = strtok(rgcOptCpy, g_pcSep); pcCurrOpt; pcCurrOpt = strtok(NULL, g_pcSep), iCurrArg++)
 	{
 		g_sJavaVMInitArgs.options[iCurrArg].optionString = malloc(strlen(pcCurrOpt) + 1);
@@ -1496,7 +1509,6 @@ int prepare(const char *lpCmdLine)
 	g_sJavaVMInitArgs.nOptions = iArgCnt;
 	setMainClassAndClassPath(exePath, pathLen);
 	setCommandLineArgs(lpCmdLine);
-
 	debug("Launcher:\t%s\n", launcher.cmd);
 	debug("Launcher args:\t%s\n", launcher.args);
 	debug("Args length:\t%d/32768 chars\n", strlen(launcher.args));
@@ -1736,7 +1748,7 @@ int invokeMainClass(JNIEnv* psJNIEnv)
 		printException(psJNIEnv, jtExcptn);
 		return -1;
 	}
-	return 0;
+	return exitCode;
 }
 
 void cleanupVm()
